@@ -1,0 +1,28 @@
+plugins {
+	id 'org.springframework.boot' version '2.1.7.RELEASE'
+	id 'java'
+}
+
+apply plugin: 'io.spring.dependency-management'
+
+group = 'org.lightningj.paywall'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '1.8'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Add Paywall Spring dependency here
+	compile 'org.lightningj.paywall:paywall-spring:0.1.0'
+
+	implementation 'com.h2database:h2'
+	// Optionally if you want to use mariadb database instead of in memory, uncomment:
+	//implementation 'org.mariadb.jdbc:mariadb-java-client:2.4.0'
+
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}

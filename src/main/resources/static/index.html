@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <title>Lightning J, Paywall TA Demo</title>
+</head>
+<body>
+<nav class="navbar navbar-expand-md navbar-dark bg-dark">
+    <div class="navbar-collapse collapse w-100 order-1 order-md-0 dual-collapse2">
+        <a class="navbar-brand justify-content-left" href="#">LightningJ Paywall TA Demo</a>
+    </div>
+    <div class="navbar-collapse collapse w-100 order-3 dual-collapse2">
+        <ul class="navbar-nav ml-auto">
+            <li class="nav-item">
+                <a class="nav-link" href="https://paywall.lightningj.org">Project Doc</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="https://github.com/lightningj-org/paywall">GitHub</a>
+            </li>
+        </ul>
+    </div>
+</nav>
+<div id="welcomeCard" class="card" >
+    <div class="card-body">
+        <h5 class="card-title">Bitcoin Price Prediction Service</h5>
+        <h6 class="card-subtitle mb-2 text-muted"><i>Cost:</i> 10 Satoshis</h6>
+        <p class="card-text">Click on button below do receive a Bitcoin price indication with guaranteed 50% prediction accuracy.</p>
+        <button id="welcomeCardBuyButton" type="button" class="btn btn-primary">Buy Prediction</button>
+    </div>
+</div>
+<div id="predictionCard" class="card d-none" >
+    <div class="card-body">
+        <h5 class="card-title">Bitcoin Prediction Generated</h5>
+        <p id="predictionText" class="card-text text-white"></p>
+        <button id="predictionCardBuyButton" type="button" class="btn btn-primary">Buy New Prediction</button>
+        <button id="predictionCardResetButton" type="button" class="btn btn-primary">Reset</button>
+    </div>
+</div>
+<div id="invoiceModal" class="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Invoice Received</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div id="invoiceModalBody" class="modal-body">
+            </div>
+            <div class="modal-footer justify-content-left">
+                <button type="button" class="btn btn-secondary mr-auto" data-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="fixed-bottom bg-secondary text-white"><i>Disclamer:</i> This is not a real TA application. This is just a demo of LightingJ Paywall Framework. Do NOT consider this as financial advice in any way.</div>
+
+<!-- JavaScript Required for Paywall-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.3.0/sockjs.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.js" ></script>
+<script src="https://github.com/lightningj-org/paywall/releases/download/v0.0.1/paywall.js" ></script>
+
+<!-- Optional JavaScript -->
+<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+
+<script type="text/javascript">
+    $(document).ready(function(){
+
+
+        function requestTA(){
+            var paywallHttpRequest = new PaywallHttpRequest();
+
+            var invoiceExpireTimer;
+
+            // The invoice expiration that updates the remaining time.
+            function updateIntervalTime(){
+                var invoiceRemainingTime = paywallHttpRequest.paywall.getInvoiceExpiration().remaining();
+                var remainingTime = invoiceRemainingTime.minutes() + ":" + invoiceRemainingTime.seconds();
+                $('#invoiceTimeRemaining').text(remainingTime);
+            }
+
+            $('#invoiceModal').on('hide.bs.modal', function (event) {
+                console.log("Hidden: " + paywallHttpRequest.paywall.getState());
+                if(invoiceExpireTimer !== undefined){
+                    clearInterval(invoiceExpireTimer);
+                }
+                // Catch event that Invoice Modal is closes and free allocated resources by
+                // calling the abort() method.
+                if(paywallHttpRequest.paywall.getState() !== PaywallState.SETTLED &&
+                    paywallHttpRequest.paywall.getState() !== PaywallState.EXECUTED) {
+                    console.log("Aborted");
+                    paywallHttpRequest.abort();
+                }
+            });
+
+            // The Invoice event handler that adds invoice information to the modal and then displays it.
+            paywallHttpRequest.paywall.addEventListener("InvoiceListener", PaywallEventType.INVOICE, function (type, invoice) {
+                // Add a Paywall Invoice event Listener that displays the invoice for the user.
+                var modalBody = $('#invoiceModalBody')
+                modalBody.empty();
+                var invoiceExpire = new PaywallTime(invoice.invoiceExpireDate)
+                modalBody.append("<h6 class='text-center'>Invoice Expires In: <span id='invoiceTimeRemaining'>" + invoiceExpire.remaining().minutes() + ":" + invoiceExpire.remaining().seconds() + "</span></h6>") // Time Left
+                modalBody.append("<img class='mx-auto d-block' src='" + invoice.qrLink + "'/>"); // QR
+                var amountInSat = new PaywallAmount(invoice.invoiceAmount).as(BTCUnit.SAT);
+                modalBody.append("<h6>Price: " + amountInSat + "</h6>") // Time Left
+                modalBody.append("<div class=\"accordion\" id=\"advancedAccordion\">\n" +
+                    "    <div id=\"welcomeCard2\" class=\"card\" >\n" +
+                    "        <div class=\"card-header\" id=\"advancedAccordionHeader\">\n" +
+                    "            <h6 class=\"mb-0\">\n" +
+                    "                <button class=\"btn btn-link\" type=\"button\" data-toggle=\"collapse\" data-target=\"#advancedAccordionBody\" aria-expanded=\"false\" aria-controls=\"advancedAccordionBody\">\n" +
+                    "                    Advanced\n" +
+                    "                </button>\n" +
+                    "            </h6>\n" +
+                    "        </div>\n" +
+                    "      <div id=\"advancedAccordionBody\" class=\"collapse\" aria-labelledby=\"advancedAccordionHeader\" data-parent=\"#advancedAccordion\">\n" +
+                    "            <div class=\"card-body\">\n" +
+                    "                <div class=\"card\" >\n" +
+                    "                    <div class=\"card-body\">\n" +
+                    "                        <h6 class=\"card-subtitle mb-2 text-muted\"><i>Invoice:</i></h6>\n" +
+                    "                        <p id=\"bolt11Invoice\" class=\"card-text\">" + invoice.bolt11Invoice + "</p>\n" +
+                    "                    </div>\n" +
+                    "                </div>\n" +
+                    "                <div class=\"card\" >\n" +
+                    "                    <div class=\"card-body\">\n" +
+                    "                        <h6 class=\"card-subtitle mb-2 text-muted\"><i>Node Info:</i></h6>\n" +
+                    "                        <p id=\"nodeInfo\" class=\"card-text\">" + invoice.nodeInfo.connectString + "</p>\n" +
+                    "                    </div>\n" +
+                    "                </div>\n" +
+                    "            </div>\n" +
+                    "        </div>\n" +
+                    "      </div>\n" +
+                    "   </div>"); // Advanced, with invoice and node
+
+                 // Set the timer
+                invoiceExpireTimer = setInterval(updateIntervalTime,1000);
+
+                // Finally activate the invoice modal.
+                $('#invoiceModal').modal({});
+            });
+
+            // Event listener that hides the modal upon settlement.
+            paywallHttpRequest.paywall.addEventListener("SettledListener", PaywallEventType.SETTLED, function (type, settlement) {
+                $('#invoiceModal').modal('hide');
+            });
+
+            // Event listener that updates the modal with invoice expired information.
+            paywallHttpRequest.paywall.addEventListener("InvoiceExpiredListener", PaywallEventType.INVOICE_EXPIRED, function (type, invoice) {
+                var modalBody = $('#invoiceModalBody')
+                modalBody.empty();
+                modalBody.append("<h6 class='text-center'>Invoice Expired</h6>") // Time Left
+            });
+
+            // The same onload handler that should have been used without paywall to call the service.
+            paywallHttpRequest.onload = function(){
+                if(paywallHttpRequest.status === 200) {
+                    // Process the service response as would be done with a regular XMLHttpRequest
+                    var response = JSON.parse(paywallHttpRequest.responseText);
+                    var predictionText = $('#predictionText')
+                    predictionText.text(response.prediction);
+                    if (response.goingUp) {
+                        predictionText.removeClass("bg-danger");
+                        predictionText.addClass("bg-success");
+                    } else {
+                        predictionText.removeClass("bg-success");
+                        predictionText.addClass("bg-danger");
+                    }
+                    $('#welcomeCard').addClass("d-none");
+                    $('#predictionCard').removeClass("d-none");
+                }else{
+                    // Error calling the underlying service.
+                    console.log(paywallHttpRequest.responseText)
+                    alert("Error occurred calling the service.")
+                }
+            };
+
+            // Open up a connection to the paywalled service.
+            paywallHttpRequest.open("GET","/tademo");
+            // Send the data to the service that will trigger the payment flow if required.
+            paywallHttpRequest.send();
+
+        }
+
+
+
+        $("#welcomeCardBuyButton").click(requestTA);
+        $("#predictionCardBuyButton").click(requestTA);
+
+        $("#predictionCardResetButton").click(function () {
+            $('#welcomeCard').removeClass("d-none");
+            $('#predictionCard').addClass("d-none");
+        });
+
+
+
+    });
+
+</script>
+</body>
+</html>
